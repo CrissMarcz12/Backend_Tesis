@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Register</title></head>
+<body>
+  <h1>Crear cuenta</h1>
+  <form method="post" action="/auth/register">
+    <label>Nombre <input type="text" name="name" required></label><br>
+    <label>Email <input type="email" name="email" required></label><br>
+    <label>Contraseña <input type="password" name="password" required></label><br>
+    <button type="submit">Registrarme</button>
+  </form>
+
+  <p>¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+</body>
+</html>
