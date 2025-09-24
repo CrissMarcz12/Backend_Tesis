@@ -27,6 +27,9 @@ router.get("/profile", ensureAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "profile.html"));
 });
 
+router.get("/settings", ensureAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "views", "settings.html"));
+});
 // Página: Admin (ruta protegida + requiere rol)
 router.get("/admin", ensureAuth, ensureRole("admin"), (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "admin.html"));

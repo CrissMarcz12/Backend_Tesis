@@ -12,6 +12,7 @@ import session from "express-session";
 import passport from "./config/passport.js";
 
 // Rutas
+import accountRoutes from "./routes/account.routes.js";
 import pageRoutes from "./routes/pages.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
@@ -54,6 +55,7 @@ app.get("/me", (req, res) => {
 app.use("/", pageRoutes); // Páginas (login, register, profile, admin)
 app.use("/auth", authRoutes); // Acciones de auth (POST register/login/logout)
 app.use(meRoutes);
+app.use(accountRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
 
 // Arrancamos el servidor

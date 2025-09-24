@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Configuración de cuenta</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090d10;
+        --card: #12191f;
+        --border: #1f2a33;
+        --text: #e8eef2;
+        --muted: #99aab5;
+        --primary: #1f9cf0;
+        --primary-hover: #1685cc;
+        --danger: #f06272;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, sans-serif;
+        background: linear-gradient(180deg, #070a0d, #0f151a);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      header {
+        backdrop-filter: blur(16px);
+        background: rgba(6, 10, 13, 0.85);
+        border-bottom: 1px solid rgba(31, 42, 51, 0.7);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      .topbar {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+      .brand {
+        font-weight: 600;
+        font-size: 18px;
+      }
+      nav {
+        display: flex;
+        gap: 16px;
+        flex: 1;
+      }
+      nav a {
+        color: var(--muted);
+        text-decoration: none;
+        font-weight: 500;
+        padding: 6px 0;
+      }
+      nav a.active,
+      nav a:hover {
+        color: var(--text);
+      }
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        background: #1a232b;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--primary);
+      }
+      main {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 24px 48px;
+      }
+      h1 {
+        margin-bottom: 24px;
+        font-size: 28px;
+      }
+      form {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 32px;
+        display: grid;
+        gap: 20px;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      input {
+        border-radius: 12px;
+        border: 1px solid rgba(46, 60, 72, 0.9);
+        background: #0c1318;
+        color: var(--text);
+        font-size: 16px;
+        padding: 12px 14px;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(31, 156, 240, 0.2);
+      }
+      input[readonly] {
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      button {
+        border-radius: 999px;
+        padding: 11px 22px;
+        font-size: 15px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+      }
+      button[type="submit"] {
+        background: var(--primary);
+        color: white;
+      }
+      button[type="submit"]:hover {
+        background: var(--primary-hover);
+      }
+      button.secondary {
+        background: transparent;
+        border-color: rgba(152, 169, 184, 0.3);
+        color: var(--muted);
+      }
+      button.secondary:hover {
+        color: var(--text);
+        border-color: rgba(152, 169, 184, 0.6);
+      }
+      .status {
+        font-size: 15px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        display: none;
+      }
+      .status.show {
+        display: block;
+      }
+      .status.ok {
+        background: rgba(34, 155, 106, 0.12);
+        border-color: rgba(34, 155, 106, 0.32);
+        color: #6de1a3;
+      }
+      .status.error {
+        background: rgba(240, 98, 110, 0.12);
+        border-color: rgba(240, 98, 110, 0.32);
+        color: var(--danger);
+      }
+      @media (max-width: 600px) {
+        form {
+          padding: 24px;
+        }
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        nav {
+          width: 100%;
+          flex-wrap: wrap;
+        }
+        .actions {
+          flex-direction: column-reverse;
+          align-items: stretch;
+        }
+        button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <div class="brand">Tecsup</div>
+        <nav>
+          <a href="/profile">Inicio</a>
+          <a href="#">Tesis</a>
+          <a href="#">Ayuda</a>
+          <a href="/settings" class="active">Configuración</a>
+        </nav>
+        <div class="avatar" id="avatar">US</div>
+      </div>
+    </header>
+    <main>
+      <h1>Configuración de cuenta</h1>
+      <div id="status" class="status"></div>
+      <form id="account-form">
+        <label>
+          Nombre
+          <input id="display_name" name="display_name" placeholder="Tu nombre" />
+        </label>
+        <label>
+          Correo electrónico
+          <input id="email" name="email" readonly />
+        </label>
+        <label>
+          Contraseña actual
+          <input
+            id="current_password"
+            name="current_password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Ingresa tu contraseña actual"
+          />
+        </label>
+        <label>
+          Nueva contraseña
+          <input
+            id="new_password"
+            name="new_password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Mínimo 8 caracteres"
+          />
+        </label>
+        <label>
+          Confirmar nueva contraseña
+          <input
+            id="confirm_password"
+            name="confirm_password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Repite la contraseña"
+          />
+        </label>
+        <div class="actions">
+          <button type="button" class="secondary" id="cancel">Cancelar</button>
+          <button type="submit">Guardar cambios</button>
+        </div>
+      </form>
+    </main>
+    <script>
+      const statusBox = document.getElementById("status");
+      const form = document.getElementById("account-form");
+      const nameInput = document.getElementById("display_name");
+      const emailInput = document.getElementById("email");
+      const currentPassword = document.getElementById("current_password");
+      const newPassword = document.getElementById("new_password");
+      const confirmPassword = document.getElementById("confirm_password");
+      const avatar = document.getElementById("avatar");
+
+      function showStatus(message, type = "ok") {
+        statusBox.textContent = message;
+        statusBox.className = `status show ${type}`;
+      }
+
+      async function loadAccount() {
+        try {
+          const res = await fetch("/api/account", { credentials: "same-origin" });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.message || "No se pudo cargar la cuenta");
+          nameInput.value = json.data.display_name || "";
+          emailInput.value = json.data.email;
+          const initials = (json.data.display_name || json.data.email || "")
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((w) => w[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase();
+          avatar.textContent = initials || "US";
+        } catch (err) {
+          showStatus(err.message, "error");
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showStatus("Guardando cambios...", "ok");
+        const payload = {
+          display_name: nameInput.value,
+          current_password: currentPassword.value,
+          new_password: newPassword.value,
+          confirm_password: confirmPassword.value,
+        };
+
+        try {
+          const res = await fetch("/api/account", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.message || "No se pudo guardar");
+          showStatus(json.message || "Cambios guardados", "ok");
+          currentPassword.value = "";
+          newPassword.value = "";
+          confirmPassword.value = "";
+        } catch (err) {
+          showStatus(err.message, "error");
+        }
+      });
+
+      document.getElementById("cancel").addEventListener("click", () => {
+        window.location.href = "/profile";
+      });
+
+      loadAccount();
+    </script>
+  </body>
+</html>
