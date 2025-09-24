@@ -17,7 +17,9 @@ router.get("/login", (req, res) => {
 
 // Página: Registro (formulario)
 router.get("/register", (req, res) => {
+  const email = req.session.googleEmail || "";
   res.sendFile(path.join(__dirname, "..", "views", "register.html"));
+  // Si usas un motor de plantillas, puedes pasar el email para prellenar el campo
 });
 
 // Página: Perfil (ruta protegida)
@@ -32,7 +34,8 @@ router.get("/admin", ensureAuth, ensureRole("admin"), (req, res) => {
 
 // Home simple que redirige a /profile si ya estás logueado
 router.get("/", (req, res) => {
-  if (req.isAuthenticated && req.isAuthenticated()) return res.redirect("/profile");
+  if (req.isAuthenticated && req.isAuthenticated())
+    return res.redirect("/profile");
   res.redirect("/login");
 });
 

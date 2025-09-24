@@ -1,28 +1,29 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Perfil</title></head>
-<body>
-  <h1>Perfil (protegido)</h1>
-  <!-- Mostramos datos haciendo una llamada a /me (opcional) -->
-  <div id="user"></div>
-
-  <p><a href="/admin">Ir a Admin</a> (solo si tienes rol admin)</p>
-
-  <form method="post" action="/auth/logout">
-    <button type="submit">Cerrar sesión</button>
-  </form>
-
-  <script>
-    // Cargamos info del usuario actual
-    fetch('/me').then(r => r.json()).then(d => {
-      if (!d.isAuthenticated) location.href = '/login';
-      else {
-        document.getElementById('user').innerHTML =
-          `<p><b>Nombre:</b> ${d.user.name}</p>
-           <p><b>Email:</b> ${d.user.email}</p>
-           <p><b>Rol:</b> ${d.user.role}</p>`;
-      }
-    });
-  </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Perfil</title>
+  </head>
+  <body>
+    <h1>Perfil (protegido)</h1>
+    <div id="user"></div>
+    <p><a href="/admin">Ir a Admin</a> (solo si tienes rol admin)</p>
+    <form method="post" action="/auth/logout">
+      <button type="submit">Cerrar sesión</button>
+    </form>
+    <script>
+      fetch("/me")
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d.isAuthenticated) location.href = "/login";
+          else {
+            document.getElementById("user").innerHTML = `<p><b>Nombre:</b> ${
+              d.user.display_name || d.user.name
+            }</p>
+             <p><b>Email:</b> ${d.user.email}</p>
+             <p><b>Rol:</b> ${d.user.roles || d.user.role}</p>`;
+          }
+        });
+    </script>
+  </body>
 </html>

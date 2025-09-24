@@ -1,14 +1,25 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Login</title></head>
-<body>
-  <h1>Iniciar sesión</h1>
-  <form method="post" action="/auth/login">
-    <label>Email <input type="email" name="email" required></label><br>
-    <label>Contraseña <input type="password" name="password" required></label><br>
-    <button type="submit">Entrar</button>
-  </form>
+  <head>
+    <meta charset="utf-8" />
+    <title>Login</title>
+  </head>
+  <body>
+    <h1>Iniciar sesión</h1>
+    <form method="post" action="/auth/login">
+      <label>Email <input type="email" name="email" required /></label><br />
+      <label
+        >Contraseña <input type="password" name="password" required /></label
+      ><br />
+      <button type="submit">Entrar</button>
+    </form>
 
-  <p>¿No tienes cuenta? <a href="/register">Regístrate</a></p>
-</body>
+    <p>
+      <a href="/auth/google">
+        <button type="button">Iniciar sesión con Google</button>
+      </a>
+    </p>
+
+    <p>¿No tienes cuenta? <a href="/register">Regístrate</a></p>
+  </body>
 </html>
