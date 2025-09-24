@@ -103,6 +103,7 @@
               <th>Rol(es)</th>
               <th>Estado</th>
               <th>Creación</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
@@ -146,15 +147,31 @@
         tbody.innerHTML = "";
 
         json.data.forEach((u) => {
+          const roles = (u.roles || "")
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean);
+          const isAdmin = roles.includes("admin");
+
           const tr = document.createElement("tr");
           tr.innerHTML = `
           <td>${u.display_name || ""}</td>
           <td>${u.email}</td>
-          <td>${u.roles || ""}</td>
+          <td>${roles.join(", ")}</td>
           <td><span class="badge ${u.is_active ? "ok" : "off"}">${
             u.is_active ? "Activo" : "Inactivo"
           }</span></td>
           <td>${new Date(u.created_at).toLocaleString()}</td>
+                    <td>
+            <button onclick="${
+              isAdmin
+                ? `toggleAdmin('${u.id}', false)`
+                : `toggleAdmin('${u.id}', true)`
+            }">
+              ${isAdmin ? "Quitar admin" : "Hacer admin"}
+            </button>
+          </td>
+
         `;
           tbody.appendChild(tr);
         });
@@ -184,6 +201,23 @@
       };
 
       load();
+      async function toggleAdmin(userId, makeAdmin) {
+        const message = makeAdmin
+          ? "¿Seguro que quieres hacer admin a este usuario?"
+          : "¿Seguro que quieres quitar el rol admin?";
+        if (!confirm(message)) return;
+
+        const endpoint = makeAdmin ? "grant-admin" : "revoke-admin";
+        const res = await fetch(`/api/admin/users/${userId}/${endpoint}`, {
+          method: "POST",
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          alert("No se pudo actualizar el rol. Intenta nuevamente.");
+          return;
+        }
+        load();
+      }
     </script>
   </body>
 </html>

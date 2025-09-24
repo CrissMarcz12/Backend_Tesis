@@ -96,19 +96,37 @@ router.post("/:id/grant-admin", async (req, res) => {
   res.json({ ok: true });
 });
 
-// Quitar admin
+// Quitar admin y asegurar rol usuario
 router.post("/:id/revoke-admin", async (req, res) => {
   const userId = req.params.id;
-  const roleRows = await query(
+  const adminRoleRows = await query(
     "SELECT id FROM auth.roles WHERE name = 'admin'"
   );
-  if (!roleRows.length)
-    return res.status(500).json({ ok: false, error: "No existe rol admin" });
-  const roleId = roleRows[0].id;
+  if (!adminRoleRows.length)
+    return res
+      .status(500)
+      .json({ ok: false, error: "No existe rol admin" });
+
+  const adminRoleId = adminRoleRows[0].id;
+
   await query(
     "DELETE FROM auth.user_roles WHERE user_id = $1 AND role_id = $2",
-    [userId, roleId]
+    [userId, adminRoleId]
   );
+   const userRoleRows = await query(
+    "SELECT id FROM auth.roles WHERE name = 'user'"
+  );
+  if (!userRoleRows.length)
+    return res
+      .status(500)
+      .json({ ok: false, error: "No existe rol usuario" });
+
+  const userRoleId = userRoleRows[0].id;
+  await query(
+    "INSERT INTO auth.user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    [userId, userRoleId]
+  );
+
   res.json({ ok: true });
 });
 
