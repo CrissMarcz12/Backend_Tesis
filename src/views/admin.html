@@ -1,9 +1,189 @@
-<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Admin</title></head>
-<body>
-  <h1>Panel Admin (solo admins)</h1>
-  <p>Si ves esto, tienes rol <b>admin</b>.</p>
-  <p><a href="/profile">Volver</a></p>
-</body>
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Panel Admin – Usuarios</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        background: #0b0f12;
+        color: #e8eef2;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #141a1f;
+        border: 1px solid #1f2933;
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      input,
+      select,
+      button {
+        background: #0f1419;
+        color: #e8eef2;
+        border: 1px solid #233040;
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      button {
+        cursor: pointer;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid #1f2933;
+        text-align: left;
+      }
+      th {
+        color: #9bb3c7;
+        font-weight: 600;
+      }
+      .badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid #2a3a4b;
+        font-size: 12px;
+        display: inline-block;
+      }
+      .ok {
+        background: #102a18;
+        border-color: #1b4d2a;
+      }
+      .off {
+        background: #2a1414;
+        border-color: #4d1b1b;
+      }
+      .pager {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Gestión de Usuarios</h1>
+      <div class="card">
+        <div class="toolbar">
+          <input id="q" placeholder="Buscar por nombre o correo..." />
+          <select id="status">
+            <option value="">Estado (todos)</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </select>
+          <select id="role">
+            <option value="">Rol (todos)</option>
+            <option value="admin">Administrador</option>
+            <option value="user">Usuario</option>
+          </select>
+          <button id="btnSearch">Buscar</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Correo</th>
+              <th>Rol(es)</th>
+              <th>Estado</th>
+              <th>Creación</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+
+        <div class="pager">
+          <button id="prev">Anterior</button>
+          <span id="info"></span>
+          <button id="next">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let page = 1,
+        limit = 10,
+        total = 0;
+
+      async function load() {
+        const q = document.getElementById("q").value.trim();
+        const status = document.getElementById("status").value;
+        const role = document.getElementById("role").value;
+
+        const params = new URLSearchParams({ page, limit });
+        if (q) params.set("q", q);
+        if (status) params.set("status", status);
+        if (role) params.set("role", role);
+
+        const res = await fetch(`/api/admin/users?` + params.toString(), {
+          credentials: "same-origin",
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          alert("Error cargando usuarios");
+          return;
+        }
+
+        total = json.total;
+
+        const tbody = document.getElementById("rows");
+        tbody.innerHTML = "";
+
+        json.data.forEach((u) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td>${u.display_name || ""}</td>
+          <td>${u.email}</td>
+          <td>${u.roles || ""}</td>
+          <td><span class="badge ${u.is_active ? "ok" : "off"}">${
+            u.is_active ? "Activo" : "Inactivo"
+          }</span></td>
+          <td>${new Date(u.created_at).toLocaleString()}</td>
+        `;
+          tbody.appendChild(tr);
+        });
+
+        const start = (json.page - 1) * json.limit + 1;
+        const end = Math.min(json.page * json.limit, total);
+        document.getElementById(
+          "info"
+        ).textContent = `Mostrando ${start}-${end} de ${total}`;
+      }
+
+      document.getElementById("btnSearch").onclick = () => {
+        page = 1;
+        load();
+      };
+      document.getElementById("prev").onclick = () => {
+        if (page > 1) {
+          page--;
+          load();
+        }
+      };
+      document.getElementById("next").onclick = () => {
+        if (page * limit < total) {
+          page++;
+          load();
+        }
+      };
+
+      load();
+    </script>
+  </body>
 </html>

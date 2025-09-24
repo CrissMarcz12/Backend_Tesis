@@ -15,6 +15,7 @@ import passport from "./config/passport.js";
 import pageRoutes from "./routes/pages.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
+import adminUsersRoutes from "./routes/admin.users.routes.js";
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.get("/me", (req, res) => {
 app.use("/", pageRoutes); // Páginas (login, register, profile, admin)
 app.use("/auth", authRoutes); // Acciones de auth (POST register/login/logout)
 app.use(meRoutes);
+app.use("/api/admin/users", adminUsersRoutes);
 
 // Arrancamos el servidor
 const PORT = process.env.PORT || 3000;

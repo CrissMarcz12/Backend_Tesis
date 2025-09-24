@@ -1,7 +1,7 @@
 import { Router } from "express";
-import path from "path";
 import { fileURLToPath } from "url";
 import { ensureAuth, ensureRole } from "../middlewares/auth.js";
+import path from "path";
 
 // Necesitamos __dirname en ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +31,9 @@ router.get("/profile", ensureAuth, (req, res) => {
 router.get("/admin", ensureAuth, ensureRole("admin"), (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "admin.html"));
 });
+router.get("/admin/manage", ensureAuth, ensureRole("admin"), (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "views", "admin_manage.html"));
+});
 
 // Home simple que redirige a /profile si ya estás logueado
 router.get("/", (req, res) => {
@@ -38,5 +41,9 @@ router.get("/", (req, res) => {
     return res.redirect("/profile");
   res.redirect("/login");
 });
+
+const bcrypt = await import('bcrypt');
+const hash = await bcrypt.default.hash('admin1234', 10);
+console.log(hash);
 
 export default router;

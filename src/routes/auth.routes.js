@@ -26,11 +26,27 @@ router.get("/google/callback", (req, res, next) => {
     if (!user) {
       return res.redirect("/login?error=google");
     }
-    // Enviar código de verificación antes de loguear
-    await sendVerificationCode(user);
-    // Guarda temporalmente el id del usuario para la verificación
-    req.session.pendingUserId = user.id;
-    res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+    // Consulta roles del usuario
+    const rolesRows = await query(
+      `SELECT r.name FROM auth.user_roles ur
+       JOIN auth.roles r ON r.id = ur.role_id
+       WHERE ur.user_id = $1`,
+      [user.id]
+    );
+    const roles = rolesRows.map((r) => r.name);
+
+    if (roles.includes("admin")) {
+      // Si es admin, inicia sesión directo
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.redirect("/profile");
+      });
+    } else {
+      // Si es usuario normal, pide verificación de 2 pasos
+      await sendVerificationCode(user);
+      req.session.pendingUserId = user.id;
+      res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+    }
   })(req, res, next);
 });
 
@@ -71,14 +87,30 @@ router.post("/login", async (req, res) => {
   if (!user.password_hash)
     return res.status(401).send("No tienes contraseña, usa Google.");
 
+  const bcrypt = await import("bcrypt");
   const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) return res.status(401).send("Contraseña incorrecta");
 
-  // Enviar código de verificación
-  await sendVerificationCode(user);
+  // Consulta roles del usuario
+  const rolesRows = await query(
+    `SELECT r.name FROM auth.user_roles ur
+     JOIN auth.roles r ON r.id = ur.role_id
+     WHERE ur.user_id = $1`,
+    [user.id]
+  );
+  const roles = rolesRows.map((r) => r.name);
 
-  // Muestra formulario para ingresar código
-  res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+  if (roles.includes("admin")) {
+    // Si es admin, inicia sesión directo
+    req.login(user, (err) => {
+      if (err) return res.status(500).send("Error de sesión");
+      res.redirect("/profile");
+    });
+  } else {
+    // Si es usuario normal, pide verificación de 2 pasos
+    await sendVerificationCode(user);
+    res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+  }
 });
 
 router.post("/verify", async (req, res) => {

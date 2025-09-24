@@ -124,16 +124,18 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     const rows = await query(
-      `SELECT u.id, u.email, u.display_name,
-              COALESCE(string_agg(r.name, ', '), '') AS roles
-         FROM auth.users u
-         LEFT JOIN auth.user_roles ur ON ur.user_id = u.id
-         LEFT JOIN auth.roles r ON r.id = ur.role_id
-        WHERE u.id = $1
-        GROUP BY u.id, u.email, u.display_name`,
+      `SELECT u.id, u.email, u.display_name, u.is_active,
+              COALESCE(string_agg(r.name::text, ',') FILTER (WHERE r.name IS NOT NULL), '') AS roles
+       FROM auth.users u
+       LEFT JOIN auth.user_roles ur ON ur.user_id = u.id
+       LEFT JOIN auth.roles r ON r.id = ur.role_id
+       WHERE u.id = $1
+       GROUP BY u.id`,
       [id]
     );
-    done(null, rows[0] || null);
+    const user = rows[0];
+    user.roles = user.roles ? user.roles.split(",").filter(Boolean) : [];
+    done(null, user);
   } catch (err) {
     done(err);
   }
