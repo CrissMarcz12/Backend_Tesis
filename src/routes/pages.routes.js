@@ -30,12 +30,19 @@ router.get("/profile", ensureAuth, (req, res) => {
 router.get("/settings", ensureAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "settings.html"));
 });
+
+router.get("/chat", ensureAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "views", "chat.html"));
+});
 // Página: Admin (ruta protegida + requiere rol)
 router.get("/admin", ensureAuth, ensureRole("admin"), (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "admin.html"));
 });
 router.get("/admin/manage", ensureAuth, ensureRole("admin"), (req, res) => {
   res.sendFile(path.join(__dirname, "..", "views", "admin_manage.html"));
+});
+router.get("/admin/chat", ensureAuth, ensureRole("admin"), (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "views", "admin_chat.html"));
 });
 
 // Home simple que redirige a /profile si ya estás logueado
