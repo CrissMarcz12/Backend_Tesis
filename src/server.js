@@ -17,6 +17,9 @@ import pageRoutes from "./routes/pages.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
+import adminChatRoutes from "./routes/admin.chat.routes.js";
+
 
 const app = express();
 
@@ -57,6 +60,8 @@ app.use("/auth", authRoutes); // Acciones de auth (POST register/login/logout)
 app.use(meRoutes);
 app.use(accountRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
+app.use("/api/chat", chatRoutes);
+app.use("/api/admin/chat", adminChatRoutes);
 
 // Arrancamos el servidor
 const PORT = process.env.PORT || 3000;

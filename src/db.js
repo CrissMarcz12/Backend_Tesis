@@ -14,3 +14,25 @@ export async function query(sql, params = []) {
   const res = await pool.query(sql, params);
   return res.rows;
 }
+
+// Helper sencillo para ejecutar bloques dentro de una transacción explícita.
+// Se usa cuando necesitamos varias operaciones atómicas (por ejemplo, crear
+// una conversación y registrar automáticamente al propietario como
+// participante).
+export async function withTransaction(callback) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await callback({
+      query: (sql, params = []) => client.query(sql, params),
+      client,
+    });
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
