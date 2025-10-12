@@ -4,6 +4,7 @@ dotenv.config();
 
 // Express es nuestro servidor HTTP
 import express from "express";
+import cors from "cors";
 // Morgan muestra logs de cada request (útil para aprender)
 import morgan from "morgan";
 // Sesiones en servidor (stateful); guardan un id de sesión en cookie
@@ -13,16 +14,43 @@ import passport from "./config/passport.js";
 
 // Rutas
 import accountRoutes from "./routes/account.routes.js";
-import pageRoutes from "./routes/pages.routes.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import adminChatRoutes from "./routes/admin.chat.routes.js";
+const FRONTEND_URL = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.replace(/\/+$/, "")
+  : null;
+
+const extraOrigins = process.env.CORS_EXTRA_ORIGINS
+  ? process.env.CORS_EXTRA_ORIGINS.split(",").map((origin) =>
+      origin.trim().replace(/\/+$/, "")
+    )
+  : [];
+
+const allowedOrigins = new Set(
+  [FRONTEND_URL, ...extraOrigins, "http://localhost:5173", "http://127.0.0.1:5173"]
+    .filter(Boolean)
+    .map((origin) => origin.replace(/\/+$/, ""))
+);
 
 
 const app = express();
-
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const normalized = origin.replace(/\/+$/, "");
+      if (!allowedOrigins.size || allowedOrigins.has(normalized)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 // Middlewares "globales": se ejecutan en cada request
 app.use(morgan("dev")); // Logs de las peticiones
 app.use(express.urlencoded({ extended: true })); // Parsear <form> (x-www-form-urlencoded)
@@ -54,14 +82,27 @@ app.get("/me", (req, res) => {
   });
 });
 
-// Usamos nuestras rutas
-app.use("/", pageRoutes); // Páginas (login, register, profile, admin)
+
 app.use("/auth", authRoutes); // Acciones de auth (POST register/login/logout)
 app.use(meRoutes);
 app.use(accountRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/admin/chat", adminChatRoutes);
+
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "API operativa",
+  });
+});
+
+app.use((err, _req, res, next) => {
+  if (err?.message === "Origin not allowed by CORS") {
+    return res.status(403).json({ ok: false, message: "CORS no permitido" });
+  }
+  return next(err);
+});
 
 // Arrancamos el servidor
 const PORT = process.env.PORT || 3000;

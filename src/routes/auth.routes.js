@@ -1,13 +1,32 @@
 import { Router } from "express";
 import passport from "../config/passport.js";
 import nodemailer from "nodemailer";
-import crypto from "crypto";
+
 import bcrypt from "bcrypt";
 import { ensureAuth } from "../middlewares/auth.js";
 import { query } from "../db.js";
-import path from "path";
 
 const router = Router();
+const FRONTEND_URL = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.replace(/\/+$/, "")
+  : null;
+
+function sanitizeUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    display_name: user.display_name || "",
+  };
+}
+
+function handleFrontRedirect(res, path, fallbackPayload) {
+  if (FRONTEND_URL) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return res.redirect(`${FRONTEND_URL}${normalizedPath}`);
+  }
+  return res.json(fallbackPayload);
+}
 
 // Iniciar login con Google
 router.get(
@@ -19,12 +38,19 @@ router.get(
 router.get("/google/callback", (req, res, next) => {
   passport.authenticate("google", async (err, user, info) => {
     if (err) return next(err);
-    if (!user && info && info.message === "register_with_google") {
+    if (!user && info?.message === "register_with_google") {
       req.session.googleEmail = info.email;
-      return res.redirect("/register?google=1");
+      return handleFrontRedirect(res, "/register?google=1", {
+        ok: false,
+        requiresRegistration: true,
+        email: info.email,
+      });
     }
     if (!user) {
-      return res.redirect("/login?error=google");
+      return handleFrontRedirect(res, "/login?error=google", {
+        ok: false,
+        message: "No se pudo autenticar con Google",
+      });
     }
     // Consulta roles del usuario
     const rolesRows = await query(
@@ -37,61 +63,74 @@ router.get("/google/callback", (req, res, next) => {
 
     if (roles.includes("admin")) {
       // Si es admin, inicia sesión directo
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.redirect("/profile");
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        return handleFrontRedirect(res, "/profile", {
+          ok: true,
+          requiresVerification: false,
+          user: sanitizeUser(user),
+          roles,
+        });
       });
     } else {
       // Si es usuario normal, pide verificación de 2 pasos
       await sendVerificationCode(user);
       req.session.pendingUserId = user.id;
-      res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+      return handleFrontRedirect(
+        res,
+        `/verify?email=${encodeURIComponent(user.email)}`,
+        {
+          ok: true,
+          requiresVerification: true,
+          email: user.email,
+        }
+      );
     }
   })(req, res, next);
 });
 
 // LOGOUT: cierra sesión
 router.post("/logout", (req, res, next) => {
-  // req.logout borra la sesión del usuario
+
   req.logout((err) => {
     if (err) return next(err);
-    // Redirige al login
-    res.redirect("/login?msg=bye");
+
+    res.json({ ok: true, message: "Sesión finalizada" });
   });
 });
-
-// Elimina o comenta ESTA ruta:
-/*
-router.post(
-  "/login",
-  // passport.authenticate hace la verificación de email/password
-  passport.authenticate("local", {
-    failureRedirect: "/login?error=invalid", // Si falla, vuelve al login
-  }),
-  // Si pasa, ya tienes req.user. Redirigimos al perfil
-  (req, res) => {
-    res.redirect("/profile");
-  }
-);
-*/
-
-// Deja solo la versión con verificación por código:
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  const rows = await query("SELECT * FROM auth.users WHERE email = $1", [
-    email,
-  ]);
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ ok: false, message: "Email y contraseña son obligatorios" });
+  }
+
+
+    const rows = await query("SELECT * FROM auth.users WHERE email = $1", [email]);
+
   const user = rows[0];
-  if (!user) return res.status(401).send("Usuario no existe");
-  if (!user.is_active) return res.status(403).send("Usuario inactivo");
+  if (!user)
+    return res.status(401).json({ ok: false, message: "Usuario no existe" });
+  if (!user.is_active)
+    return res.status(403).json({ ok: false, message: "Usuario inactivo" });
   if (!user.password_hash)
-    return res.status(401).send("No tienes contraseña, usa Google.");
+    return res
+      .status(401)
+      .json({
+        ok: false,
+        message: "No tienes contraseña configurada, inicia con Google",
+      });
 
-  const bcrypt = await import("bcrypt");
+
   const isMatch = await bcrypt.compare(password, user.password_hash);
-  if (!isMatch) return res.status(401).send("Contraseña incorrecta");
+  if (!isMatch)
+    return res
+      .status(401)
+      .json({ ok: false, message: "Contraseña incorrecta" });
 
-  // Consulta roles del usuario
+
   const rolesRows = await query(
     `SELECT r.name FROM auth.user_roles ur
      JOIN auth.roles r ON r.id = ur.role_id
@@ -101,28 +140,42 @@ router.post("/login", async (req, res) => {
   const roles = rolesRows.map((r) => r.name);
 
   if (roles.includes("admin")) {
-    // Si es admin, inicia sesión directo
+
     req.login(user, (err) => {
-      if (err) return res.status(500).send("Error de sesión");
-      res.redirect("/profile");
+      if (err)
+        return res
+          .status(500)
+          .json({ ok: false, message: "No se pudo iniciar la sesión" });
+      return res.json({
+        ok: true,
+        requiresVerification: false,
+        user: sanitizeUser(user),
+        roles,
+      });
     });
   } else {
-    // Si es usuario normal, pide verificación de 2 pasos
+
     await sendVerificationCode(user);
-    res.sendFile(path.join(process.cwd(), "src/views/verify.html"));
+    req.session.pendingUserId = user.id;
+    res.json({
+      ok: true,
+      requiresVerification: true,
+      email: user.email,
+    });
   }
 });
 
 router.post("/verify", async (req, res) => {
-  const { email, code } = req.body;
+  const { email, code } = req.body || {};
   let user;
+
   if (req.session.pendingUserId) {
     // Verificación tras Google
     const rows = await query("SELECT * FROM auth.users WHERE id = $1", [
       req.session.pendingUserId,
     ]);
     user = rows[0];
-  } else {
+  } else if (email) {
     // Verificación tras login manual
     const rows = await query("SELECT * FROM auth.users WHERE email = $1", [
       email,
@@ -136,7 +189,9 @@ router.post("/verify", async (req, res) => {
     !user.verification_expires ||
     new Date() > user.verification_expires
   ) {
-    return res.status(401).send("Código inválido o expirado");
+    return res
+      .status(401)
+      .json({ ok: false, message: "Código inválido o expirado" });
   }
 
   // Limpia el código y completa el login
@@ -145,48 +200,58 @@ router.post("/verify", async (req, res) => {
     [user.id]
   );
   req.login(user, (err) => {
-    if (err) return res.status(500).send("Error de sesión");
-    // Limpia la sesión temporal
+    if (err)
+      return res
+        .status(500)
+        .json({ ok: false, message: "No se pudo iniciar la sesión" });
     delete req.session.pendingUserId;
-    res.redirect("/profile");
+    res.json({ ok: true, requiresVerification: false, user: sanitizeUser(user) });
   });
 });
 
 // Mostrar formulario para establecer contraseña
 router.get("/set-password", ensureAuth, (req, res) => {
-  res.sendFile(path.join(process.cwd(), "src/views/set_password.html"));
+  res.json({ ok: true, message: "Puedes establecer tu contraseña vía POST" });
 });
 
 // Guardar la nueva contraseña
 router.post("/set-password", ensureAuth, async (req, res) => {
-  const { password } = req.body;
+  const { password } = req.body || {};
   if (!password || password.length < 8) {
-    return res.status(400).send("Contraseña muy corta");
+    return res
+      .status(400)
+      .json({ ok: false, message: "La contraseña debe tener 8 caracteres" });
   }
   const hash = await bcrypt.hash(password, 10);
   await query("UPDATE auth.users SET password_hash = $1 WHERE id = $2", [
     hash,
     req.user.id,
   ]);
-  res.redirect("/profile");
+  res.json({ ok: true, message: "Contraseña actualizada" });
 });
 
 router.post("/register", async (req, res) => {
   try {
-    const { email, display_name, password } = req.body;
+    const { email, display_name, password } = req.body || {};
 
     // Validaciones básicas
     if (!email || !display_name || !password)
-      return res.status(400).send("Faltan campos");
+      return res
+        .status(400)
+        .json({ ok: false, message: "Faltan campos obligatorios" });
     if (password.length < 8)
-      return res.status(400).send("Contraseña muy corta");
+      return res
+        .status(400)
+        .json({ ok: false, message: "Contraseña muy corta" });
 
     // ¿Ya existe el usuario?
     const exists = await query("SELECT 1 FROM auth.users WHERE email = $1", [
       email,
     ]);
     if (exists.length)
-      return res.status(409).send("El email ya está registrado");
+      return res
+        .status(409)
+        .json({ ok: false, message: "El email ya está registrado" });
 
     // Hash de la contraseña
     const hash = await bcrypt.hash(password, 10);
@@ -211,30 +276,35 @@ router.post("/register", async (req, res) => {
       );
     }
 
-    // Si viene de Google, enlaza la cuenta OAuth
+
     if (req.session.googleEmail) {
-      // Busca el último provider_account_id de Google (no lo tienes, así que pide al usuario iniciar sesión con Google de nuevo)
-      // Limpia la sesión
+
       delete req.session.googleEmail;
-      // Puedes mostrar un mensaje: "Ahora inicia sesión con Google para enlazar tu cuenta"
-      return res.redirect("/login?msg=now_google");
+      return res.json({
+        ok: true,
+        requiresGoogleLink: true,
+        message: "Ahora inicia sesión con Google para enlazar tu cuenta",
+      });
     }
 
     // Login automático tras registro
     req.login(user, (err) => {
-      if (err) return res.status(500).send("Error de sesión");
-      res.redirect("/profile");
+      if (err)
+        return res
+          .status(500)
+          .json({ ok: false, message: "No se pudo iniciar la sesión" });
+      res.json({ ok: true, user: sanitizeUser(user) });
     });
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error al registrar usuario");
+    res.status(500).json({ ok: false, message: "Error al registrar usuario" });
   }
 });
 
 async function sendVerificationCode(user) {
   // Genera código de 6 dígitos
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+  const expires = new Date(Date.now() + 10 * 60 * 1000);
 
   await query(
     "UPDATE auth.users SET verification_code = $1, verification_expires = $2 WHERE id = $3",

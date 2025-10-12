@@ -4,8 +4,8 @@ import { query } from "../db.js";
 export function ensureAuth(req, res, next) {
   // req.isAuthenticated() lo agrega Passport vía session()
   if (req.isAuthenticated && req.isAuthenticated()) return next();
-  // Si no está autenticado, lo mandamos a login
-  return res.redirect("/login?error=need_login");
+  // Si no está autenticado, respondemos con 401
+  return res.status(401).json({ ok: false, message: "Autenticación requerida" });
 }
 
 // Middleware: requiere un rol específico (ej. "admin")
@@ -13,7 +13,10 @@ export function ensureRole(roleName) {
   // Devolvemos un middleware que verifica el rol
   return async function (req, res, next) {
     // Si no hay usuario, respondemos con 401 (No autenticado)
-    if (!req.user) return res.status(401).send("No autenticado");
+    if (!req.user)
+      return res
+        .status(401)
+        .json({ ok: false, message: "Autenticación requerida" });
 
     // Usa los roles del usuario si ya están cargados
     if (Array.isArray(req.user.roles) && req.user.roles.includes(roleName)) {
@@ -31,6 +34,8 @@ export function ensureRole(roleName) {
     );
 
     if (rows.length) return next();
-    return res.status(403).send(`Prohibido: necesitas rol ${roleName}`);
+    return res
+      .status(403)
+      .json({ ok: false, message: `Prohibido: necesitas rol ${roleName}` });
   };
 }
