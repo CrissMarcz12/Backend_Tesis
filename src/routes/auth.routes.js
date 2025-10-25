@@ -10,7 +10,9 @@ const router = Router();
 const FRONTEND_URL = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.replace(/\/+$/, "")
   : null;
-
+const FRONTEND_CALLBACK_URL = FRONTEND_URL
+  ? `${FRONTEND_URL}/auth/callback`
+  : null;
 function sanitizeUser(user) {
   if (!user) return null;
   return {
@@ -21,9 +23,17 @@ function sanitizeUser(user) {
 }
 
 function handleFrontRedirect(res, path, fallbackPayload) {
-  if (FRONTEND_URL) {
+  if (FRONTEND_CALLBACK_URL) {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return res.redirect(`${FRONTEND_URL}${normalizedPath}`);
+        const targetUrl = new URL(normalizedPath, `${FRONTEND_URL}/`);
+    const callbackUrl = new URL(FRONTEND_CALLBACK_URL);
+
+    callbackUrl.searchParams.set("redirect", targetUrl.pathname);
+    targetUrl.searchParams.forEach((value, key) => {
+      callbackUrl.searchParams.append(key, value);
+    });
+
+    return res.redirect(callbackUrl.toString());
   }
   return res.json(fallbackPayload);
 }
