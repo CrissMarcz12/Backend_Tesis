@@ -18,9 +18,10 @@ router.get("/conversations", async (req, res) => {
     const offset = (p - 1) * l;
 
     const totalRows = await query(
-      `SELECT COUNT(DISTINCT conversation_id)::int AS count
-       FROM chat.participants
-       WHERE user_id = $1`,
+      `SELECT COUNT(DISTINCT p.conversation_id)::int AS count
+       FROM chat.participants p
+       JOIN chat.conversations c ON c.id = p.conversation_id
+       WHERE p.user_id = $1 AND c.is_active`,
       [userId]
     );
     const total = totalRows[0]?.count || 0;
@@ -32,6 +33,7 @@ router.get("/conversations", async (req, res) => {
          c.owner_user_id,
          c.created_at,
          c.closed_at,
+         c.is_active,
          COALESCE(stats.messages_count, 0) AS messages_count,
          stats.last_message_at,
          COALESCE(participants.participants, '[]'::json) AS participants
@@ -57,6 +59,7 @@ router.get("/conversations", async (req, res) => {
          FROM chat.participants cp
          WHERE cp.conversation_id = c.id
        ) participants ON TRUE
+       WHERE c.is_active
        ORDER BY COALESCE(stats.last_message_at, c.created_at) DESC
        LIMIT $2 OFFSET $3`,
       [userId, l, offset]
@@ -79,7 +82,7 @@ router.post("/conversations", async (req, res) => {
       const { rows: convRows } = await query(
         `INSERT INTO chat.conversations (owner_user_id, title)
          VALUES ($1, $2)
-         RETURNING id, owner_user_id, title, created_at, closed_at`,
+         RETURNING id, owner_user_id, title, created_at, closed_at is_active`,
         [userId, title]
       );
 
@@ -117,11 +120,11 @@ router.get("/conversations/:id", async (req, res) => {
     const userId = req.user.id;
 
     const conversations = await query(
-      `SELECT c.id, c.title, c.owner_user_id, c.created_at, c.closed_at
+            `SELECT c.id, c.title, c.owner_user_id, c.created_at, c.closed_at, c.is_active
        FROM chat.conversations c
        JOIN chat.participants p
          ON p.conversation_id = c.id AND p.user_id = $2
-       WHERE c.id = $1`,
+       WHERE c.id = $1 AND c.is_active`
       [conversationId, userId]
     );
 
@@ -163,6 +166,32 @@ router.get("/conversations/:id", async (req, res) => {
   }
 });
 
+// Eliminación lógica de una conversación (solo el propietario puede hacerlo).
+router.delete("/conversations/:id", async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    const userId = req.user.id;
+
+    const rows = await query(
+      `UPDATE chat.conversations c
+       SET is_active = FALSE,
+           closed_at = COALESCE(c.closed_at, NOW())
+       WHERE c.id = $1 AND c.owner_user_id = $2 AND c.is_active
+       RETURNING c.id, c.title, c.owner_user_id, c.created_at, c.closed_at, c.is_active`,
+      [conversationId, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "conversation_not_found" });
+    }
+
+    res.json({ ok: true, data: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 // Listado de mensajes dentro de una conversación (solo participantes).
 router.get("/conversations/:id/messages", async (req, res) => {
   try {
@@ -170,8 +199,10 @@ router.get("/conversations/:id/messages", async (req, res) => {
     const userId = req.user.id;
 
     const membership = await query(
-      `SELECT 1 FROM chat.participants
-       WHERE conversation_id = $1 AND user_id = $2
+      `SELECT 1
+       FROM chat.participants p
+       JOIN chat.conversations c ON c.id = p.conversation_id AND c.is_active
+       WHERE p.conversation_id = $1 AND p.user_id = $2
        LIMIT 1`,
       [conversationId, userId]
     );
@@ -229,8 +260,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
 
     const membership = await query(
-      `SELECT is_owner FROM chat.participants
-       WHERE conversation_id = $1 AND user_id = $2
+      `SELECT p.is_owner
+       FROM chat.participants p
+       JOIN chat.conversations c ON c.id = p.conversation_id AND c.is_active
+       WHERE p.conversation_id = $1 AND p.user_id = $2
        LIMIT 1`,
       [conversationId, userId]
     );
@@ -260,8 +293,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
       senderUserId = sender_user_id;
       if (senderUserId !== userId) {
         const allowed = await query(
-          `SELECT 1 FROM chat.participants
-           WHERE conversation_id = $1 AND user_id = $2
+          `SELECT 1
+           FROM chat.participants p
+           JOIN chat.conversations c ON c.id = p.conversation_id AND c.is_active
+           WHERE p.conversation_id = $1 AND p.user_id = $2
            LIMIT 1`,
           [conversationId, senderUserId]
         );
@@ -305,6 +340,7 @@ router.post("/messages/:id/feedback", async (req, res) => {
     const ownership = await query(
       `SELECT 1
        FROM chat.messages m
+              JOIN chat.conversations c ON c.id = m.conversation_id AND c.is_active
        JOIN chat.participants p
          ON p.conversation_id = m.conversation_id AND p.user_id = $2
        WHERE m.id = $1

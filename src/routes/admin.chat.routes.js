@@ -41,17 +41,20 @@ router.get("/conversations", async (req, res) => {
 
     const whereSQL = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 
+    const baseFrom =
+      "FROM admin.v_conversations_summary v JOIN chat.conversations c ON c.id = v.conversation_id";
+
+
     const totalRows = await query(
       `SELECT COUNT(*)::int AS count
-       FROM admin.v_conversations_summary v
+       ${baseFrom}
        ${whereSQL}`,
       params
     );
     const total = totalRows[0]?.count || 0;
 
     const rows = await query(
-      `SELECT *
-       FROM admin.v_conversations_summary v
+        `SELECT v.*, c.is_active
        ${whereSQL}
        ORDER BY v.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -71,7 +74,7 @@ router.get("/conversations/:id", async (req, res) => {
     const conversationId = req.params.id;
 
     const conversations = await query(
-      `SELECT id, owner_user_id, title, created_at, closed_at
+      `SELECT id, owner_user_id, title, created_at, closed_at, is_active
        FROM chat.conversations
        WHERE id = $1`,
       [conversationId]

@@ -14,58 +14,102 @@ import passport from "./config/passport.js";
 
 // Rutas
 import accountRoutes from "./routes/account.routes.js";
-
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import adminChatRoutes from "./routes/admin.chat.routes.js";
-const FRONTEND_URL = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.replace(/\/+$/, "")
-  : null;
 
-const extraOrigins = process.env.CORS_EXTRA_ORIGINS
-  ? process.env.CORS_EXTRA_ORIGINS.split(",").map((origin) =>
-      origin.trim().replace(/\/+$/, "")
-    )
-  : [];
+// Normaliza URLs (quita slash final)
+const normalize = (u) => (u ? u.trim().replace(/\/+$/, "") : u);
 
+// FRONTEND_URL (o NEXT_PUBLIC_FRONTEND_URL) desde .env
+const FRONTEND_URL = normalize(
+  process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || null
+);
+
+// Orígenes extra por coma
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || "")
+  .split(",")
+  .map((o) => normalize(o))
+  .filter(Boolean);
+
+// Lista base de orígenes permitidos (incluye Vite por defecto)
 const allowedOrigins = new Set(
   [FRONTEND_URL, ...extraOrigins, "http://localhost:5173", "http://127.0.0.1:5173"]
     .filter(Boolean)
-    .map((origin) => origin.replace(/\/+$/, ""))
+    .map((o) => normalize(o))
 );
 
+// Helper: detectar orígenes en red local (rango privado)
+function isLocalNetworkOrigin(origin) {
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (/^10\.\d+\.\d+\.\d+$/.test(hostname)) return true;
+    if (/^192\.168\.\d+\.\d+$/.test(hostname)) return true;
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(hostname)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 const app = express();
+
+// --- CORS ---
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Permitir requests sin Origin (curl/Postman/server-to-server)
       if (!origin) return callback(null, true);
-      const normalized = origin.replace(/\/+$/, "");
-      if (!allowedOrigins.size || allowedOrigins.has(normalized)) {
+
+      const normalized = normalize(origin);
+
+      // Permitidos explícitos
+      if (allowedOrigins.size > 0 && allowedOrigins.has(normalized)) {
         return callback(null, true);
       }
+
+      // Permitir IPs de red local (ej: http://192.168.56.1:5173)
+      if (isLocalNetworkOrigin(origin)) {
+        return callback(null, true);
+      }
+
+      // Modo dev abierto si no configuraste nada
+      if (allowedOrigins.size === 0 && (process.env.NODE_ENV || "development") === "development") {
+        return callback(null, true);
+      }
+
       return callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
+
+// (Opcional) Responder preflights manualmente por si algún proxy los corta
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // Middlewares "globales": se ejecutan en cada request
-app.use(morgan("dev")); // Logs de las peticiones
-app.use(express.urlencoded({ extended: true })); // Parsear <form> (x-www-form-urlencoded)
-app.use(express.json()); // Parsear JSON (por si posteamos JSON)
+app.use(morgan("dev"));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 // Configuramos la sesión del servidor
 app.use(
   session({
-    secret: process.env.SESSION_SECRET, // Clave para firmar la cookie de sesión
-    resave: false, // No volver a guardar si no hay cambios
-    saveUninitialized: false, // No crear sesiones vacías
+    secret: process.env.SESSION_SECRET || "dev-secret-no-uses-esto-en-produccion",
+    resave: false,
+    saveUninitialized: false,
     cookie: {
-      httpOnly: true, // JS del navegador no puede leer la cookie (más seguro)
-      sameSite: "lax", // Previene CSRF básico en navegación normal
-      secure: false, // En producción con HTTPS ponlo en true
+      httpOnly: true,
+      sameSite: "lax", // ver nota abajo si usas sesión entre dominios
+      secure: false,   // en prod HTTPS ponlo en true
     },
   })
 );
@@ -82,8 +126,7 @@ app.get("/me", (req, res) => {
   });
 });
 
-
-app.use("/auth", authRoutes); // Acciones de auth (POST register/login/logout)
+app.use("/auth", authRoutes);
 app.use(meRoutes);
 app.use(accountRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
@@ -91,10 +134,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/admin/chat", adminChatRoutes);
 
 app.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    message: "API operativa",
-  });
+  res.json({ ok: true, message: "API operativa" });
 });
 
 app.use((err, _req, res, next) => {
@@ -108,4 +148,5 @@ app.use((err, _req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("✅ Servidor listo en http://localhost:" + PORT);
+  console.log("CORS permitidos:", [...allowedOrigins].join(", ") || "(LAN/dev abierto)");
 });
