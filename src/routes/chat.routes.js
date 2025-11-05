@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { ensureAuth } from "../middlewares/auth.js";
 import { query, withTransaction } from "../db.js";
+import { buildRagPayload, queryRag, RagClientError } from "../services/ragClient.js";
 
 const router = Router();
 
@@ -220,6 +221,7 @@ router.get("/conversations/:id/messages", async (req, res) => {
          m.content,
          m.latency_ms,
          m.created_at,
+          m.metadata,
          COALESCE(feedback.items, '[]'::json) AS feedback
        FROM chat.messages m
        LEFT JOIN LATERAL (
@@ -314,7 +316,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
          content,
          latency_ms
        ) VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, conversation_id, sender_user_id, sender, content, latency_ms, created_at`,
+              RETURNING id, conversation_id, sender_user_id, sender, content, latency_ms, created_at, metadata`,
       [conversationId, senderUserId, sender, content.trim(), latency]
     );
 
@@ -324,6 +326,128 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
+
+router.post("/conversations/:id/ask", async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    const userId = req.user.id;
+    const { question, k = undefined, evaluate = undefined } = req.body || {};
+
+    let payload;
+    try {
+      payload = buildRagPayload({ question, k, evaluate });
+    } catch (err) {
+      if (err instanceof RagClientError) {
+        return res.status(400).json({ ok: false, error: "invalid_request", message: err.message });
+      }
+      throw err;
+    }
+
+    const membership = await query(
+      `SELECT p.is_owner
+       FROM chat.participants p
+       JOIN chat.conversations c ON c.id = p.conversation_id AND c.is_active
+       WHERE p.conversation_id = $1 AND p.user_id = $2
+       LIMIT 1`,
+      [conversationId, userId]
+    );
+
+    if (!membership.length) {
+      return res.status(404).json({ ok: false, error: "conversation_not_found" });
+    }
+
+    const sanitizedQuestion = payload.question;
+
+    const userRows = await query(
+      `INSERT INTO chat.messages (
+         conversation_id,
+         sender_user_id,
+         sender,
+         content,
+         latency_ms
+       ) VALUES ($1, $2, 'user', $3, NULL)
+       RETURNING id, conversation_id, sender_user_id, sender, content, latency_ms, created_at, metadata`,
+      [conversationId, userId, sanitizedQuestion]
+    );
+
+    const userMessage = userRows[0];
+
+    let ragResult;
+    try {
+      ragResult = await queryRag(payload);
+    } catch (err) {
+      console.error("Error al consultar el motor RAG", err);
+      const errorMetadata = {
+        rag: {
+          request: payload,
+          error: {
+            message: err.message,
+            status: err.status ?? null,
+            details: err.details ?? null,
+          },
+        },
+      };
+
+      await query(
+        `INSERT INTO chat.messages (
+           conversation_id,
+           sender_user_id,
+           sender,
+           content,
+           latency_ms,
+           metadata
+         ) VALUES ($1, NULL, 'system', $2, NULL, $3)
+         RETURNING id`,
+        [conversationId, "Ocurrió un problema al consultar la IA. Intenta nuevamente más tarde.", JSON.stringify(errorMetadata)]
+      );
+
+      if (err instanceof RagClientError && err.status === 400) {
+        return res.status(400).json({ ok: false, error: "rag_invalid_request", message: err.message });
+      }
+
+      return res.status(502).json({ ok: false, error: "rag_unavailable", message: err.message });
+    }
+
+    const botMetadata = {
+      rag: {
+        request: ragResult.rag_request,
+        response: {
+          sources: ragResult.sources,
+          evaluation: ragResult.evaluation,
+        },
+        raw: ragResult.raw,
+      },
+    };
+
+    const botRows = await query(
+      `INSERT INTO chat.messages (
+         conversation_id,
+         sender_user_id,
+         sender,
+         content,
+         latency_ms,
+         metadata
+       ) VALUES ($1, NULL, 'bot', $2, $3, $4)
+       RETURNING id, conversation_id, sender_user_id, sender, content, latency_ms, created_at, metadata`,
+      [conversationId, ragResult.answer, ragResult.latency_ms, JSON.stringify(botMetadata)]
+    );
+
+    const botMessage = botRows[0];
+
+    res.status(201).json({
+      ok: true,
+      data: {
+        user: userMessage,
+        bot: botMessage,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 
 // Calificar un mensaje (1-5) y opcionalmente dejar un comentario/sugerencia.
 router.post("/messages/:id/feedback", async (req, res) => {

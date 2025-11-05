@@ -102,10 +102,11 @@ router.get("/conversations/:id", async (req, res) => {
          m.sender_user_id,
          su.display_name AS sender_display_name,
          su.email AS sender_email,
-         m.content,
-         m.latency_ms,
-         m.created_at,
-         COALESCE(feedback.items, '[]'::json) AS feedback
+        m.content,
+        m.latency_ms,
+        m.created_at,
+        m.metadata,
+        COALESCE(feedback.items, '[]'::json) AS feedback
        FROM chat.messages m
        LEFT JOIN auth.users su ON su.id = m.sender_user_id
        LEFT JOIN LATERAL (
@@ -198,8 +199,9 @@ router.get("/feedback/messages", async (req, res) => {
          f.created_at,
          m.conversation_id,
          m.sender,
-         m.created_at AS message_created_at,
-         su.display_name AS sender_display_name,
+        m.created_at AS message_created_at,
+        m.metadata,
+        su.display_name AS sender_display_name,
          su.email AS sender_email
        FROM chat.message_feedback f
        JOIN chat.messages m ON m.id = f.message_id

@@ -19,6 +19,7 @@ import meRoutes from "./routes/me.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import adminChatRoutes from "./routes/admin.chat.routes.js";
+import { ensureChatMessageMetadataColumn } from "./db.migrations.js";
 
 // Normaliza URLs (quita slash final)
 const normalize = (u) => (u ? u.trim().replace(/\/+$/, "") : u);
@@ -144,9 +145,22 @@ app.use((err, _req, res, next) => {
   return next(err);
 });
 
-// Arrancamos el servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("✅ Servidor listo en http://localhost:" + PORT);
-  console.log("CORS permitidos:", [...allowedOrigins].join(", ") || "(LAN/dev abierto)");
-});
+async function bootstrap() {
+  try {
+    await ensureChatMessageMetadataColumn();
+  } catch (err) {
+    console.error("❌ Error al preparar la base de datos:", err);
+    process.exit(1);
+  }
+
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log("✅ Servidor listo en http://localhost:" + PORT);
+    console.log(
+      "CORS permitidos:",
+      [...allowedOrigins].join(", ") || "(LAN/dev abierto)"
+    );
+  });
+}
+
+bootstrap();
