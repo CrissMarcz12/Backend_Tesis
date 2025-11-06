@@ -125,7 +125,7 @@ router.get("/conversations/:id", async (req, res) => {
        FROM chat.conversations c
        JOIN chat.participants p
          ON p.conversation_id = c.id AND p.user_id = $2
-       WHERE c.id = $1 AND c.is_active`
+       WHERE c.id = $1 AND c.is_active`,
       [conversationId, userId]
     );
 

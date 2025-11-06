@@ -25,16 +25,22 @@ function sanitizeUser(user) {
 function handleFrontRedirect(res, path, fallbackPayload) {
   if (FRONTEND_CALLBACK_URL) {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-        const targetUrl = new URL(normalizedPath, `${FRONTEND_URL}/`);
+    const targetUrl = new URL(normalizedPath, `${FRONTEND_URL}/`);
     const callbackUrl = new URL(FRONTEND_CALLBACK_URL);
 
+    // Copiar los parámetros relevantes del payload (como email o success)
+    for (const [key, value] of Object.entries(fallbackPayload)) {
+      if (value !== undefined && value !== null) {
+        callbackUrl.searchParams.append(key, value.toString());
+      }
+    }
+
+    // Mantener compatibilidad con redirect
     callbackUrl.searchParams.set("redirect", targetUrl.pathname);
-    targetUrl.searchParams.forEach((value, key) => {
-      callbackUrl.searchParams.append(key, value);
-    });
 
     return res.redirect(callbackUrl.toString());
   }
+
   return res.json(fallbackPayload);
 }
 
