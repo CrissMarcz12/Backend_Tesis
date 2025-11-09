@@ -35,12 +35,24 @@ const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || "")
   .map((o) => normalize(o))
   .filter(Boolean);
 
+
+  // ¿Abrimos CORS a cualquier origen? (por defecto sí, para permitir cualquier front)
+const allowAllOrigins =
+  (process.env.CORS_ALLOW_ALL ?? "true").toLowerCase() === "true";
+
+  const allowedOrigins = allowAllOrigins
+  ? null
+  : new Set(
+      [
+        FRONTEND_URL,
+        ...extraOrigins,
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+      ]
+        .filter(Boolean)
+        .map((o) => normalize(o))
+    );
 // Lista base de orígenes permitidos (incluye Vite por defecto)
-const allowedOrigins = new Set(
-  [FRONTEND_URL, ...extraOrigins, "http://localhost:5173", "http://127.0.0.1:5173"]
-    .filter(Boolean)
-    .map((o) => normalize(o))
-);
 
 // Helper: detectar orígenes en red local (rango privado)
 function isLocalNetworkOrigin(origin) {
@@ -62,13 +74,17 @@ const app = express();
 app.use(
   cors({
     origin: (origin, callback) => {
+            if (allowAllOrigins) {
+        return callback(null, true);
+      }
+
       // Permitir requests sin Origin (curl/Postman/server-to-server)
       if (!origin) return callback(null, true);
 
       const normalized = normalize(origin);
 
       // Permitidos explícitos
-      if (allowedOrigins.size > 0 && allowedOrigins.has(normalized)) {
+      if (allowedOrigins && allowedOrigins.size > 0 && allowedOrigins.has(normalized)) {
         return callback(null, true);
       }
 
@@ -78,7 +94,11 @@ app.use(
       }
 
       // Modo dev abierto si no configuraste nada
-      if (allowedOrigins.size === 0 && (process.env.NODE_ENV || "development") === "development") {
+            if (
+        allowedOrigins &&
+        allowedOrigins.size === 0 &&
+        (process.env.NODE_ENV || "development") === "development"
+      ) {
         return callback(null, true);
       }
 
@@ -158,7 +178,9 @@ async function bootstrap() {
     console.log("✅ Servidor listo en http://localhost:" + PORT);
     console.log(
       "CORS permitidos:",
-      [...allowedOrigins].join(", ") || "(LAN/dev abierto)"
+            allowAllOrigins
+        ? "(todos los orígenes)"
+        : [...(allowedOrigins ?? [])].join(", ") || "(LAN/dev abierto)"
     );
   });
 }
