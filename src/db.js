@@ -7,6 +7,7 @@ const { Pool } = pkg;
 // Creamos un "pool" de conexiones: PostgreSQL mantiene un conjunto de conexiones listas
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // Función de ayuda: ejecuta un query con parámetros y devuelve [rows]
