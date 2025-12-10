@@ -212,6 +212,7 @@ router.get('/conversations', async (req, res) => {
 
     const rows = await query(
       `SELECT v.*, c.is_active
+       ${baseFrom}
        ${whereSQL}
        ORDER BY v.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
