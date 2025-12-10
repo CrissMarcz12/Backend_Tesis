@@ -1,41 +1,43 @@
 // Cargar .env
-import dotenv from "dotenv";
-dotenv.config();
+import dotenv from 'dotenv'
+dotenv.config()
 
-import express from "express";
-import cors from "cors";
-import morgan from "morgan";
-import session from "express-session";
-import passport from "./config/passport.js";
+import connectPgSimple from 'connect-pg-simple'
+import cors from 'cors'
+import express from 'express'
+import session from 'express-session'
+import morgan from 'morgan'
+import passport from './config/passport.js'
+import { pool } from './db.js'
 
 // Rutas
-import accountRoutes from "./routes/account.routes.js";
-import authRoutes from "./routes/auth.routes.js";
-import meRoutes from "./routes/me.routes.js";
-import adminUsersRoutes from "./routes/admin.users.routes.js";
-import chatRoutes from "./routes/chat.routes.js";
-import adminChatRoutes from "./routes/admin.chat.routes.js";
 import {
   ensureChatMessageMetadataColumn,
   ensureDatabaseSchema,
-} from "./db.migrations.js";
+} from './db.migrations.js'
+import accountRoutes from './routes/account.routes.js'
+import adminChatRoutes from './routes/admin.chat.routes.js'
+import adminUsersRoutes from './routes/admin.users.routes.js'
+import authRoutes from './routes/auth.routes.js'
+import chatRoutes from './routes/chat.routes.js'
+import meRoutes from './routes/me.routes.js'
 // Utils
-const normalize = (u) => (u ? u.trim().replace(/\/+$/, "") : u);
+const normalize = (u) => (u ? u.trim().replace(/\/+$/, '') : u)
 
 // FRONTEND_URL opcional (no es necesario si CORS_ALLOW_ALL=true)
 const FRONTEND_URL = normalize(
   process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || null
-);
+)
 
 // Orígenes extra por coma
-const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || "")
-  .split(",")
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
   .map((o) => normalize(o))
-  .filter(Boolean);
+  .filter(Boolean)
 
 // Abrir/limitar CORS por env (en EB pon CORS_ALLOW_ALL=true)
 const allowAllOrigins =
-  (process.env.CORS_ALLOW_ALL ?? "true").toLowerCase() === "true";
+  (process.env.CORS_ALLOW_ALL ?? 'true').toLowerCase() === 'true'
 
 const allowedOrigins = allowAllOrigins
   ? null
@@ -43,129 +45,144 @@ const allowedOrigins = allowAllOrigins
       [
         FRONTEND_URL,
         ...extraOrigins,
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
       ]
         .filter(Boolean)
         .map((o) => normalize(o))
-    );
+    )
 
 function isLocalNetworkOrigin(origin) {
   try {
-    const { hostname } = new URL(origin);
-    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
-    if (/^10\.\d+\.\d+\.\d+$/.test(hostname)) return true;
-    if (/^192\.168\.\d+\.\d+$/.test(hostname)) return true;
-    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(hostname)) return true;
-    return false;
+    const { hostname } = new URL(origin)
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+    if (/^10\.\d+\.\d+\.\d+$/.test(hostname)) return true
+    if (/^192\.168\.\d+\.\d+$/.test(hostname)) return true
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(hostname)) return true
+    return false
   } catch {
-    return false;
+    return false
   }
 }
 
-const app = express();
+const app = express()
 
 // *** IMPORTANTE detrás de ALB/ELB para cookies Secure ***
-app.set("trust proxy", 1);
+app.set('trust proxy', 1)
 
 // --- CORS ---
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (allowAllOrigins) return callback(null, true);
-      if (!origin) return callback(null, true); // curl/Postman
-      const normalized = normalize(origin);
+      if (allowAllOrigins) return callback(null, true)
+      if (!origin) return callback(null, true) // curl/Postman
+      const normalized = normalize(origin)
       if (allowedOrigins && allowedOrigins.has(normalized)) {
-        return callback(null, true);
+        return callback(null, true)
       }
-      if (isLocalNetworkOrigin(origin)) return callback(null, true);
+      if (isLocalNetworkOrigin(origin)) return callback(null, true)
       if (
         allowedOrigins &&
         allowedOrigins.size === 0 &&
-        (process.env.NODE_ENV || "development") === "development"
+        (process.env.NODE_ENV || 'development') === 'development'
       ) {
-        return callback(null, true);
+        return callback(null, true)
       }
-      return callback(new Error("Origin not allowed by CORS"));
+      return callback(new Error('Origin not allowed by CORS'))
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Set-Cookie'],
   })
-);
+)
 
 // Preflight rápido
 app.use((req, res, next) => {
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+  if (req.method === 'OPTIONS') return res.sendStatus(204)
+  next()
+})
 
 // Middlewares base
-app.use(morgan("dev"));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(morgan('dev'))
+app.use(express.urlencoded({ extended: true }))
+app.use(express.json())
 
-// --- Sesión (cross-site) ---
+// --- Sesión con PostgreSQL Store (reemplaza MemoryStore) ---
+const PgSession = connectPgSimple(session)
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "cambia-esto-en-render",
+    store: new PgSession({
+      pool: pool,
+      tableName: 'user_sessions',
+      createTableIfMissing: true,
+      pruneSessionInterval: 60 * 15, // Limpia sesiones expiradas cada 15 min
+    }),
+    secret: process.env.SESSION_SECRET || 'cambia-esto-en-render',
     resave: false,
     saveUninitialized: false,
-cookie: {
-  httpOnly: true,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  secure: process.env.NODE_ENV === "production",
-},
-
+    name: 'connect.sid',
+    cookie: {
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000, // 24 horas
+      path: '/',
+    },
   })
-);
-
+)
 
 // Passport
-app.use(passport.initialize());
-app.use(passport.session());
+app.use(passport.initialize())
+app.use(passport.session())
 
 // Rutas
-app.get("/me", (req, res) => {
+app.get('/me', (req, res) => {
   res.json({
     isAuthenticated: !!(req.isAuthenticated && req.isAuthenticated()),
     user: req.user || null,
-  });
-});
+  })
+})
 
-app.use("/auth", authRoutes);
-app.use(meRoutes);
-app.use(accountRoutes);
-app.use("/api/admin/users", adminUsersRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/admin/chat", adminChatRoutes);
+app.use('/auth', authRoutes)
+app.use(meRoutes)
+app.use(accountRoutes)
+app.use('/api/admin/users', adminUsersRoutes)
+app.use('/api/chat', chatRoutes)
+app.use('/api/admin/chat', adminChatRoutes)
 
-app.get("/", (_req, res) => {
-  res.json({ ok: true, message: "API operativa" });
-});
+app.get('/', (_req, res) => {
+  res.json({ ok: true, message: 'API operativa' })
+})
 
 // Manejo CORS denegado
 app.use((err, _req, res, next) => {
-  if (err?.message === "Origin not allowed by CORS") {
-    return res.status(403).json({ ok: false, message: "CORS no permitido" });
+  if (err?.message === 'Origin not allowed by CORS') {
+    return res.status(403).json({ ok: false, message: 'CORS no permitido' })
   }
-  return next(err);
-});
+  return next(err)
+})
 
 async function bootstrap() {
   try {
-    await ensureDatabaseSchema();               // <---- ESTA CREA auth, chat, admin, TABLAS Y VISTAS
-    await ensureChatMessageMetadataColumn();    // opcional
+    await ensureDatabaseSchema() // <---- ESTA CREA auth, chat, admin, TABLAS Y VISTAS
+    await ensureChatMessageMetadataColumn() // opcional
   } catch (err) {
-    console.error("❌ Error al preparar la base de datos:", err);
-    process.exit(1);
+    console.error('❌ Error al preparar la base de datos:', err)
+    process.exit(1)
   }
 
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Backend en Render corriendo en puerto ${PORT}`);
-    console.log("🔵 CORS permitidos:", allowAllOrigins ? "(todos los orígenes)" : [...(allowedOrigins ?? [])].join(", "));
-  });
+  const PORT = process.env.PORT || 3000
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Backend en Render corriendo en puerto ${PORT}`)
+    console.log(
+      '🔵 CORS permitidos:',
+      allowAllOrigins
+        ? '(todos los orígenes)'
+        : [...(allowedOrigins ?? [])].join(', ')
+    )
+  })
 }
 
-bootstrap();
+bootstrap()
