@@ -1,4 +1,4 @@
-import pool from "./db.js";
+import { pool } from "./db.js";
 
 export async function ensureChatMessageMetadataColumn() {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS chat;`);
