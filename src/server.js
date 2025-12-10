@@ -106,17 +106,17 @@ app.use(express.json());
 // --- Sesión (cross-site) ---
 app.use(
   session({
-    secret:
-      process.env.SESSION_SECRET || "dev-secret-no-uses-esto-en-produccion",
+    secret: process.env.SESSION_SECRET || "cambia-esto-en-render",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "none", // imprescindible entre dominios (Amplify ↔ EB)
-      secure: true, // requiere HTTPS (termina en el ALB)
+      sameSite: "none",
+      secure: process.env.NODE_ENV === "production",  // SOLO en producción
     },
   })
 );
+
 
 // Passport
 app.use(passport.initialize());
@@ -157,17 +157,18 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  // *** Elastic Beanstalk define PORT automáticamente ***
-  const PORT = process.env.PORT || 8080;
-  app.listen(PORT, "127.0.0.1", () => {
-    console.log("✅ Servidor listo en http://localhost:" + PORT);
+  // Render asigna PORT automáticamente — debe usarse DIRECTO
+  const PORT = process.env.PORT || 3000;
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Backend en Render corriendo en puerto ${PORT}`);
     console.log(
-      "CORS permitidos:",
+      "🔵 CORS permitidos:",
       allowAllOrigins
         ? "(todos los orígenes)"
         : [...(allowedOrigins ?? [])].join(", ") || "(LAN/dev abierto)"
     );
   });
 }
-
 bootstrap();
+
