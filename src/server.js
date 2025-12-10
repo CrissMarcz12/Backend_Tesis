@@ -111,11 +111,12 @@ app.use(
     secret: process.env.SESSION_SECRET || "cambia-esto-en-render",
     resave: false,
     saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "none",
-      secure: process.env.NODE_ENV === "production",  // SOLO en producción
-    },
+cookie: {
+  httpOnly: true,
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  secure: process.env.NODE_ENV === "production",
+},
+
   })
 );
 
