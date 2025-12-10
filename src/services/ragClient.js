@@ -1,15 +1,19 @@
 import "dotenv/config";
 
-const DEFAULT_BASE_URL = "http://localhost:8010";
+const DEFAULT_API_URL = "http://18.231.122.110:8000/rag/query";
+const DEFAULT_BASE_URL = "http://18.231.122.110:8000";
 const DEFAULT_QUERY_PATH = "/rag/query";
 const DEFAULT_TIMEOUT_MS = 60000;
 const DEFAULT_TOP_K = 5;
 
 function buildURL() {
+    const apiUrl = process.env.RAG_API_URL?.trim();
+  if (apiUrl) return apiUrl;
+
   const base = (process.env.RAG_BASE_URL || DEFAULT_BASE_URL).trim();
   const path = (process.env.RAG_QUERY_PATH || DEFAULT_QUERY_PATH).trim();
   const url = new URL(path, base.endsWith("/") ? base : `${base}/`);
-  return url.toString();
+    return url.toString() || DEFAULT_API_URL;
 }
 
 function getDefaultEvaluate() {
