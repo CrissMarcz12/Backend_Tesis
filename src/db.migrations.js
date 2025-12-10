@@ -1,5 +1,9 @@
 import { pool } from "./db.js";
+import bcrypt from "bcrypt";
 
+// =========================================
+// 1. SCHEMA AUTH
+// =========================================
 async function createAuthSchema() {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS auth;`);
 
@@ -42,8 +46,41 @@ async function createAuthSchema() {
       UNIQUE (provider, provider_account_id)
     );
   `);
+
+  // ================================
+  // 🟢 Crear roles por defecto
+  // ================================
+  await pool.query(`
+    INSERT INTO auth.roles(name) VALUES('admin'),('user')
+    ON CONFLICT(name) DO NOTHING;
+  `);
+
+  // ================================
+  // 🟢 Crear administradores iniciales
+  // ================================
+  const ADMIN_PASSWORD = "Admin2025!";  // Puedes cambiarlo aquí
+  const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+
+  await pool.query(`
+    INSERT INTO auth.users (email, password_hash, display_name)
+    VALUES
+      ('cristhian.marcelo@tecsup.edu.pe', '${hash}', 'Admin Cristhian'),
+      ('jose.chalco@tecsup.edu.pe', '${hash}', 'Admin Jose Chalco')
+    ON CONFLICT (email) DO NOTHING;
+  `);
+
+  await pool.query(`
+    INSERT INTO auth.user_roles (user_id, role_id)
+    SELECT u.id, r.id FROM auth.users u
+    JOIN auth.roles r ON r.name='admin'
+    WHERE u.email IN ('cristhian.marcelo@tecsup.edu.pe','jose.chalco@tecsup.edu.pe')
+    ON CONFLICT DO NOTHING;
+  `);
 }
 
+// =========================================
+// 2. CHAT SCHEMA
+// =========================================
 async function createChatSchema() {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS chat;`);
 
@@ -94,6 +131,9 @@ async function createChatSchema() {
   `);
 }
 
+// =========================================
+// 3. ADMIN VIEW SCHEMA
+// =========================================
 async function createAdminSchema() {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS admin;`);
 
@@ -147,8 +187,6 @@ export async function ensureDatabaseSchema() {
 }
 
 export async function ensureChatMessageMetadataColumn() {
-  await pool.query(`CREATE SCHEMA IF NOT EXISTS chat;`);
-
   await pool.query(`
     ALTER TABLE IF EXISTS chat.messages
     ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
