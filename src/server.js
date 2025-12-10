@@ -153,24 +153,18 @@ app.use((err, _req, res, next) => {
 
 async function bootstrap() {
   try {
-    await ensureChatMessageMetadataColumn();
+    await ensureDatabaseSchema();               // <---- ESTA CREA auth, chat, admin, TABLAS Y VISTAS
+    await ensureChatMessageMetadataColumn();    // opcional
   } catch (err) {
     console.error("❌ Error al preparar la base de datos:", err);
     process.exit(1);
   }
 
-  // Render asigna PORT automáticamente — debe usarse DIRECTO
   const PORT = process.env.PORT || 3000;
-
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Backend en Render corriendo en puerto ${PORT}`);
-    console.log(
-      "🔵 CORS permitidos:",
-      allowAllOrigins
-        ? "(todos los orígenes)"
-        : [...(allowedOrigins ?? [])].join(", ") || "(LAN/dev abierto)"
-    );
+    console.log("🔵 CORS permitidos:", allowAllOrigins ? "(todos los orígenes)" : [...(allowedOrigins ?? [])].join(", "));
   });
 }
-bootstrap();
 
+bootstrap();
