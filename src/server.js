@@ -15,8 +15,10 @@ import meRoutes from "./routes/me.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import adminChatRoutes from "./routes/admin.chat.routes.js";
-import { ensureChatMessageMetadataColumn } from "./db.migrations.js";
-
+import {
+  ensureChatMessageMetadataColumn,
+  ensureDatabaseSchema,
+} from "./db.migrations.js";
 // Utils
 const normalize = (u) => (u ? u.trim().replace(/\/+$/, "") : u);
 
